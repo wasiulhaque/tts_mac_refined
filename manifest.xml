@@ -21,7 +21,7 @@
   <Permissions>ReadWriteDocument</Permissions>
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
     <Hosts>
-      <Host xsi:type="Document">
+      <Host xsi:type="Workbook">
         <DesktopFormFactor>
           <GetStarted>
             <Title resid="GetStarted.Title"/>
@@ -76,7 +76,7 @@
         <bt:String id="GetStarted.Title" DefaultValue="Get started with your sample add-in!"/>
         <bt:String id="CommandsGroup.Label" DefaultValue="Text-To-Speech"/>
         <bt:String id="TaskpaneButton.Label" DefaultValue="উচ্চারণ"/>
-        <bt:String id="Ribbon.Label" DefaultValue="উচ্চারণ Web"/>
+        <bt:String id="Ribbon.Label" DefaultValue="উচ্চারণ MacOS"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="Your sample add-in loaded succesfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>
