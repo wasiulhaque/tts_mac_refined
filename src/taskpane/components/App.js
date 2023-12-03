@@ -20,10 +20,11 @@ import Select, { SelectChangeEvent } from "@mui/material/Select";
 import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import SequentialAudioPlayer from "./SequentialAudioPlayer";
 import PauseOutlinedIcon from "@mui/icons-material/PauseOutlined";
 import StopOutlinedIcon from "@mui/icons-material/StopOutlined";
 import { BorderAll } from "@mui/icons-material";
+import { fileToAudioBuffer, mergeAudioBuffers } from "./../../modules/chunkify";
+import { async } from "regenerator-runtime";
 
 const containerStyle = {
   backgroundColor: "white",
@@ -71,6 +72,14 @@ const theme = createTheme({
 
 let MAX_WORD_COUNT = 20;
 let MAX_TIMEOUT_RETRY = 5;
+let responseAudios = {};
+let responseBuffers = [];
+
+let playing = false;
+let finishedPlaying = false;
+let playerIndex = 0;
+
+let isPlaying = false;
 
 /**
  * Values for the sliders
@@ -118,6 +127,8 @@ export default class App extends React.Component {
       textToPlay: null,
       downloadActivate: false,
       currentlyPlaying: false,
+      startedPlaying: false,
+      globalText: null,
     };
   }
 
@@ -202,7 +213,7 @@ export default class App extends React.Component {
   handlePitchChange = (event) => {
     this.setState({ pitch: event.target.value });
     this.pitch = event.target.value;
-    console.log(this.pitch);
+    // console.log(this.pitch);
   };
 
   /**
@@ -210,46 +221,57 @@ export default class App extends React.Component {
    * Clears all the text from the active document
    */
   handleClearButton = () => {
-    Word.run(function (context) {
-      // Get the current selection
-      var body = context.document.body;
-
-      // Clear the selection
-      body.clear();
-
-      // Sync the document changes
-      return context.sync();
-    }).catch(function (error) {
-      console.log("Error:", error);
-    });
+    this.stopAllAudio();
+    this.resetVariables();
+    this.setState({ currentlyPlaying: false, startedPlaying: false, downloadActivate: false });
   };
 
-  handleDownload = () => {
-    const blob = new Blob([this.responseAudios], { type: "audio/wav" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.style.display = "none";
-    a.href = url;
-    a.download = "audio.wav";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+  handleDownload = async () => {
+    let audioBufferList = [];
+    responseBuffers.forEach(async (responseBuffer) => {
+      let audioBuffer = await fileToAudioBuffer(responseBuffer);
+      audioBufferList.push(audioBuffer);
+      console.log(`Buffer here: ${audioBuffer}}`);
+      console.log("HJ");
+    });
+    console.log("Hello");
+
+    mergeAudioBuffers(audioBufferList);
   };
 
   /**
    * Grabs all the text from the active document
    */
   grabAllText = async () => {
+    var currentSlideIndex = null;
+    Office.context.document.getSelectedDataAsync(Office.CoercionType.SlideRange, function (asyncResult) {
+      if (asyncResult.status == "failed") {
+        console.log("Error");
+      } else {
+        currentSlideIndex = asyncResult.value.slides[0].index - 1;
+        console.log(asyncResult.value.slides[0].index);
+      }
+    });
     return new Promise((resolve, reject) => {
-      Word.run(async (context) => {
-        var body = context.document.body;
-        context.load(body, "text");
+      var text = "";
+      PowerPoint.run(async (context) => {
+        context.presentation.load("slides");
         await context.sync();
-
-        const allText = body.text;
-
-        resolve(allText);
+        const slide = context.presentation.slides.getItemAt(currentSlideIndex);
+        slide.load("shapes");
+        await context.sync();
+        const shapes = slide.shapes;
+        for (let i = 0; i < shapes.items.length; i++) {
+          const shape = shapes.items[i];
+          shape.load("textFrame/textRange");
+          await context.sync();
+          const textRange = shape.textFrame.textRange;
+          if (textRange.text) {
+            text += textRange.text + " ";
+          }
+          text += "।";
+        }
+        resolve(text);
       }).catch((error) => {
         console.log("Error:", error);
         reject(error);
@@ -262,13 +284,14 @@ export default class App extends React.Component {
    * @returns unicode string
    */
   convertAllTextToUnicode = async () => {
-    return Word.run(async (context) => {
-      var body = context.document.body;
-      context.load(body, "text");
+    return Excel.run(async (context) => {
+      const range = context.workbook.getSelectedRange();
+      range.load("values");
       return await context
         .sync()
         .then(function () {
-          var allText = body.text;
+          var allText = range.values;
+          allText = allText.toString();
           console.log(bnAnsiToUnicode(allText));
           if (this.format == "ansi") {
             return bnAnsiToUnicode(selectedText);
@@ -282,19 +305,7 @@ export default class App extends React.Component {
     });
   };
 
-  /**
-   * Takes the text from the text, chunks it in the necessary manner, sends the chunks to the server
-   * Recieves the response from the server and plays the audios synchronously
-   */
-  processTextAndPlayAudio = async () => {
-    if (this.currentlyPlaying == true) {
-      console.log("Already playing");
-      // return;
-    } else if (this.gender == null || this.format == null) {
-      this.gender = "Male";
-      this.format = "unicode";
-    }
-    this.textToPlay = null;
+  getPlainTextFromWord = async () => {
     await this.grabAllText()
       .then((selectedText) => {
         if (this.format == "ansi") {
@@ -306,188 +317,174 @@ export default class App extends React.Component {
       .catch((error) => {
         console.log(error);
       });
+  };
 
-    const chunks = this.textToPlay.split(/[\r\n।?!,;—:`’‘']+/gi).filter((token) => token.trim() != "");
-    console.log(chunks);
+  splitLongWords = (words, maxWords) => {
+    const wordChunks = [];
+    let currentWordChunk = "";
 
-    /**
-     * Takes sentence that has more words than MAX_WORD_COUNT
-     * And chunks them accordingly
-     * @param {string} words
-     * @param {int} maxWords
-     * @returns {string} wordChunks[]
-     */
-    const splitLongWords = (words, maxWords) => {
-      const wordChunks = [];
-      let currentWordChunk = "";
+    for (const word of words) {
+      if ((currentWordChunk + word).split(" ").length <= maxWords) {
+        currentWordChunk += word + " ";
+      } else {
+        if (currentWordChunk !== "") {
+          wordChunks.push(currentWordChunk.trim());
+          currentWordChunk = "";
+        }
+        wordChunks.push(word);
+      }
+    }
 
-      for (const word of words) {
-        if ((currentWordChunk + word).split(" ").length <= maxWords) {
-          currentWordChunk += word + " ";
+    if (currentWordChunk !== "") {
+      wordChunks.push(currentWordChunk.trim());
+    }
+    return wordChunks;
+  };
+
+  chunkifyPlainText() {
+    return this.textToPlay.split(/[\r\n।?!,;—:`’‘']+/gi).filter((token) => token.trim() != "");
+  }
+
+  async triggerPlayback() {
+    if (responseAudios !== null) {
+      for (; playerIndex < responseAudios.length; playerIndex++) {
+        if (responseAudios[playerIndex] != null) {
+          await new Promise((resolve) => {
+            responseAudios[playerIndex].onended = resolve;
+            responseAudios[playerIndex].play();
+          });
         } else {
-          if (currentWordChunk !== "") {
-            wordChunks.push(currentWordChunk.trim());
-            currentWordChunk = "";
-          }
-          wordChunks.push(word);
+          continue;
         }
       }
+      this.setState({ currentlyPlaying: false, downloadActivate: true, startedPlaying: false });
+    }
+  }
 
-      if (currentWordChunk !== "") {
-        wordChunks.push(currentWordChunk.trim());
-      }
-      return wordChunks;
-    };
+  /**
+   * Takes the text from the text, chunks it in the necessary manner, sends the chunks to the server
+   * Recieves the response from the server and plays the audios synchronously
+   */
+  processTextAndPlayAudio = async () => {
+    console.log(this.state.startedPlaying);
+    if (this.state.currentlyPlaying == false && this.state.startedPlaying == false) {
+      console.log("Here");
+      this.resetVariables();
+      this.textToPlay = null;
+      await this.getPlainTextFromWord();
+      await this.playNextChunk();
+    } else if (this.state.currentlyPlaying == true && this.state.startedPlaying == true) {
+      this.pauseAllAudio();
+    } else if (this.state.currentlyPlaying == false && this.state.startedPlaying == true) {
+      this.setState({ currentlyPlaying: true });
+      this.triggerPlayback();
+    }
+  };
 
-    /**
-     * playing: Determines if the player is currently running
-     * finishedPlaying: Determines if the player has finished playing all the chunks
-     * responseAidios[]: Catches all the response audio files from the servers and stores according to index
-     */
+  playNextChunk = async () => {
+    this.setState({ currentlyPlaying: true, downloadActivate: false, startedPlaying: true });
 
-    let playing = false;
-    let finishedPlaying = false;
-    let playerIndex = 0;
-    const responseAudios = [];
-
-    /**
-     * Takes the current index of the chunks upto which the audio has been played
-     * @param {int} index
-     */
-    const playSequentially = async (index) => {
-      for (playerIndex = index; playerIndex < responseAudios.length; playerIndex++) {
-        await new Promise((resolve) => {
-          // if (playing == true) {
-          //   responseAudios[playerIndex].pause();
-          //   playing = false;
-          //   console.log("Paused");
-          // } else {
-          playing = true;
-          responseAudios[playerIndex].onended = resolve;
-          responseAudios[playerIndex].play();
-          // }
-        });
-      }
-    };
-
-    /**
-     * If playing is not started yet, it starts playing from the first index
-     * If playing is interrupted, it starts playing from the chunk it got interrupted from
-     */
-    const playNextChunk = async () => {
-      if (this.currentlyPlaying == true) {
-        console.log("Already playing");
-        // return;
-      } else {
-        this.setState({ currentlyPlaying: true, downloadActivate: false });
-      }
-      if (responseAudios !== "" && !playing) {
-        playSequentially(0);
-      } else if (playerIndex !== 0 && !finishedPlaying) {
-        playSequentially(playerIndex);
-      }
-
-      if (chunks.length > 0) {
-        const chunk = chunks.shift();
-        const words = chunk.trim().split(" ");
-        console.log(words.length);
-
-        if (words.length > MAX_WORD_COUNT) {
-          const wordChunks = splitLongWords(words, MAX_WORD_COUNT);
-          for (const wordChunk of wordChunks) {
-            const requestOptions = {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                module: "backend_tts",
-                submodule: "infer",
-                text: chunk,
-              }),
-            };
-
-            let retryCount = 0;
-            let response = null;
-            while (retryCount < MAX_TIMEOUT_RETRY) {
-              try {
-                response = await fetch("https://stt.bangla.gov.bd:9381/utils/", requestOptions);
-                if (response.ok) {
-                  break;
-                }
-              } catch (error) {
-                console.log(error);
-              }
-              retryCount++;
-            }
-
-            if (response && response.ok) {
-              console.log("Response received.");
-              console.log(requestOptions);
-              // const data = await response.json();
-              // this.responseAudio = data.output;
-              // this.playableAudio = new Audio("data:audio/wav;base64," + this.responseAudio);
-              // responseAudios.push(this.playableAudio);
-              this.playableAudio = new Audio(URL.createObjectURL(await response.blob()));
-              //this.playableAudio.play();
-              responseAudios.push(this.playableAudio);
-            } else {
-              console.log("Request failed.");
-            }
-          }
-        } else {
-          console.log(chunk);
+    const chunks = this.chunkifyPlainText();
+    let index = 0;
+    for (const [chunk_index, chunk] of chunks.entries()) {
+      const words = chunk.trim().split(" ");
+      console.log(words.length);
+      if (words.length > MAX_WORD_COUNT) {
+        console.log("Max word count reached");
+        const wordChunks = this.splitLongWords(words, MAX_WORD_COUNT);
+        for (const wordChunk of wordChunks) {
           const requestOptions = {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               module: "backend_tts",
               submodule: "infer",
-              text: chunk,
+              text: wordChunk,
             }),
           };
+          try {
+            const audioBlob = await fetch("https://stt.bangla.gov.bd:9381/utils/", requestOptions).then((response) =>
+              response.blob()
+            );
 
-          let retryCount = 0;
-          let response = null;
-          while (retryCount < MAX_TIMEOUT_RETRY) {
-            try {
-              response = await fetch("https://stt.bangla.gov.bd:9381/utils/", requestOptions);
-              if (response.ok) {
-                break;
+            if (audioBlob) {
+              const blobURL = URL.createObjectURL(await audioBlob);
+              const audioElement = new Audio(await blobURL);
+              responseAudios[chunk_index + index] = audioElement;
+              console.log(`Received response for ${chunk_index + index}`);
+              if (index + chunk_index == 0) {
+                this.setState({ currentlyPlaying: true, downloadActivate: false });
+                this.triggerPlayback();
               }
-            } catch (error) {
-              console.log(error);
+            } else {
+              console.log("Error: No audio data received");
             }
-            retryCount++;
+          } catch (error) {
+            console.error("Error: ", error);
           }
-
-          if (response && response.ok) {
-            console.log("Response received.");
-            console.log(requestOptions);
-            // const data = await response.json();
-            // this.responseAudio = data.output;
-            // this.playableAudio = new Audio("data:audio/wav;base64," + this.responseAudio);
-            // responseAudios.push(this.playableAudio);
-            this.playableAudio = new Audio(URL.createObjectURL(await response.blob()));
-            //this.playableAudio.play();
-            responseAudios.push(this.playableAudio);
-          } else {
-            console.log("Request failed.");
-          }
+          index = index + 1;
         }
+      } else {
+        const requestOptions = {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            module: "backend_tts",
+            submodule: "infer",
+            text: chunk,
+          }),
+        };
+        try {
+          const audioBlob = await fetch("https://stt.bangla.gov.bd:9381/utils/", requestOptions).then((response) =>
+            response.blob()
+          );
 
-        await playNextChunk();
+          if (audioBlob) {
+            const blobURL = URL.createObjectURL(await audioBlob);
+            const audioElement = new Audio(await blobURL);
+            responseBuffers.push(await audioBlob);
+            console.log(responseBuffers.length);
+            console.log("Buffer");
+            responseAudios[chunk_index + index] = audioElement;
+            console.log(`Received response for ${chunk_index + index}`);
+            if (index + chunk_index == 0) {
+              this.setState({ currentlyPlaying: true, downloadActivate: false });
+              this.triggerPlayback();
+            }
+          } else {
+            console.log("Error: No audio data received");
+          }
+        } catch (error) {
+          console.error("Error: ", error);
+        }
       }
-    };
-
-    await playNextChunk();
-
-    finishedPlaying = true;
-    this.setState({ downloadActivate: true, currentlyPlaying: false });
-    downloadActivate = true;
-    currentlyPlaying = false;
+    }
   };
 
+  pauseAllAudio() {
+    this.setState({ currentlyPlaying: false });
+    for (const audioElement of responseAudios) {
+      audioElement.pause();
+    }
+  }
+
+  stopAllAudio() {
+    this.setState({ currentlyPlaying: false, downloadActivate: false });
+    for (const audioElement of responseAudios) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+      playerIndex = 0;
+    }
+    this.resetVariables();
+  }
+
+  resetVariables() {
+    responseAudios = [];
+    playerIndex = 0;
+  }
+
   render() {
-    const { type, format, gender, downloadActivate, currentlyPlaying } = this.state;
+    const { type, format, gender, downloadActivate, currentlyPlaying, startedPlaying } = this.state;
 
     return (
       <ThemeProvider theme={theme}>
@@ -680,7 +677,7 @@ export default class App extends React.Component {
                   color={currentlyPlaying == false ? "accent" : "pause"}
                   style={{ borderRadius: "8px", height: "40px", width: "100px" }}
                 >
-                  {currentlyPlaying == false ? <PlayArrowOutlinedIcon /> : "Loading"}
+                  {currentlyPlaying == false ? <PlayArrowOutlinedIcon /> : <PauseOutlinedIcon />}
                   {/* {currentlyPlaying == false ? "Play" : "Pause"} */}
                 </Button>
                 <Button
