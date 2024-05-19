@@ -119,7 +119,7 @@ export default class App extends React.Component {
       listItems: [],
       type: null,
       format: "unicode",
-      gender: "Male",
+      gender: "male",
       age: null,
       speed: 0,
       pitch: 0,
@@ -145,9 +145,36 @@ export default class App extends React.Component {
       this.setState({ isSocketConnected: false });
     });
     this.socket.on("result", (data) => {
-      console.log(data);
+      const {index, audio} = data;
+      console.log(`Received response for ${index}`);
+      
+      if (audio){
+        const audioSrc = `data:audio/wav;base64,${audio}`;
+        const audioElement = new Audio(audioSrc);
+        console.log(`Created audio blob players for ${index}`);
+        responseAudios[index] = audioElement;
+
+        if (index == 0) {
+          this.setState({ currentlyPlaying: true, downloadActivate: false });
+          this.triggerPlayback();
+        }
+      } else{
+        console.log("Error: No audio data received for index", index);
+      }
     });
   }
+
+  base64ToBlob = (base64Data) => {
+    console.log("Converting base64 to blob");
+    const binaryString = window.atob(base64Data);
+    const byteArray = new Uint8Array(binaryString.length);
+
+    for (let i = 0; i < binaryString.length; i++) {
+      byteArray[i] = binaryString.charCodeAt(i);
+    }
+    console.log("Conversion done");
+    return new Blob([byteArray], { type: "audio/mp3" });
+  };
 
 
   componentDidMount() {
@@ -395,70 +422,25 @@ export default class App extends React.Component {
         console.log("Max word count reached");
         const wordChunks = this.splitLongWords(words, MAX_WORD_COUNT);
         for (const wordChunk of wordChunks) {
-          const requestOptions = {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              module: "backend_tts",
-              submodule: "infer",
-              text: wordChunk,
-            }),
-          };
-          try {
-            const audioBlob = await fetch("https://stt.bangla.gov.bd:9381/utils/", requestOptions).then((response) =>
-              response.blob()
-            );
-
-            if (audioBlob) {
-              const blobURL = URL.createObjectURL(await audioBlob);
-              const audioElement = new Audio(await blobURL);
-              responseAudios[chunk_index + index] = audioElement;
-              console.log(`Received response for ${chunk_index + index}`);
-              if (index + chunk_index == 0) {
-                this.setState({ currentlyPlaying: true, downloadActivate: false });
-                this.triggerPlayback();
-              }
-            } else {
-              console.log("Error: No audio data received");
-            }
-          } catch (error) {
-            console.error("Error: ", error);
-          }
+          const chunkIndex = index;
+          this.socket.emit("text_transmit", {
+            text: wordChunk,
+            model: "vits",
+            gender: this.state.gender,
+            index: chunkIndex,
+            speaker: this.state.gender=="male"?"2":"0"
+          })
           index = index + 1;
         }
       } else {
-        const requestOptions = {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            module: "backend_tts",
-            submodule: "infer",
-            text: chunk,
-          }),
-        };
-        try {
-          const audioBlob = await fetch("https://stt.bangla.gov.bd:9381/utils/", requestOptions).then((response) =>
-            response.blob()
-          );
-
-          if (audioBlob) {
-            const blobURL = URL.createObjectURL(await audioBlob);
-            const audioElement = new Audio(await blobURL);
-            responseBuffers.push(await audioBlob);
-            console.log(responseBuffers.length);
-            console.log("Buffer");
-            responseAudios[chunk_index + index] = audioElement;
-            console.log(`Received response for ${chunk_index + index}`);
-            if (index + chunk_index == 0) {
-              this.setState({ currentlyPlaying: true, downloadActivate: false });
-              this.triggerPlayback();
-            }
-          } else {
-            console.log("Error: No audio data received");
-          }
-        } catch (error) {
-          console.error("Error: ", error);
-        }
+        console.log("Sending chunk to server: ", index + chunk_index, chunk);
+        this.socket.emit("text_transmit", {
+          text: chunk,
+          model: "vits",
+          gender: this.state.gender,
+          index: index + chunk_index,
+          speaker: this.state.gender=="male"?"2":"0"
+        })
       }
     }
   };
@@ -547,13 +529,13 @@ export default class App extends React.Component {
               <div className="button-container">
                 <ToggleButtonGroup value={gender} exclusive onChange={this.handleGenderChange}>
                   <ToggleButton
-                    value="Male"
+                    value="male"
                     aria-label="পুরুষ"
                     className="ms-welcome__action ms-button-uniform"
                     style={{
                       height: "40px",
-                      color: gender === "Male" ? "white" : "black",
-                      backgroundColor: gender === "Male" ? "#006def" : "inherit",
+                      color: gender === "male" ? "white" : "black",
+                      backgroundColor: gender === "male" ? "#006def" : "inherit",
                       borderTopLeftRadius: "8px",
                       borderBottomLeftRadius: "8px",
                       width: "80px",
@@ -562,13 +544,13 @@ export default class App extends React.Component {
                     পুরুষ
                   </ToggleButton>
                   <ToggleButton
-                    value="Female"
+                    value="female"
                     aria-label="নারী"
                     className="ms-welcome__action ms-button-uniform"
                     style={{
                       height: "40px",
-                      color: gender === "Female" ? "white" : "black",
-                      backgroundColor: gender == "Female" ? "#006def" : "inherit",
+                      color: gender === "female" ? "white" : "black",
+                      backgroundColor: gender == "female" ? "#006def" : "inherit",
                       borderTopRightRadius: "8px",
                       borderBottomRightRadius: "8px",
                       width: "80px",
@@ -613,7 +595,7 @@ export default class App extends React.Component {
             </Box>
           </div> */}
 
-            <div style={{ display: "flex" }}>
+            {/* <div style={{ display: "flex" }}>
               <div style={{ display: "flex", alignItems: "center", marginRight: "10px" }}>
                 <Typography id="speed-slider">গতি</Typography>
                 <FormControl sx={{ m: 1, minWidth: 80, minHeight: 30 }} size="small">
@@ -649,7 +631,7 @@ export default class App extends React.Component {
                   </Select>
                 </FormControl>
               </div>
-            </div>
+            </div> */}
             {/* <div>
             <Box sx={{ width: 200 }} className="button-container">
               <Typography id="pitch-slider" gutterBottom>
