@@ -209,7 +209,7 @@ export default class App extends React.Component {
     this.format = newFormat;
     console.log(this.format);
     if (this.format == "ansi") {
-      this.getPlainTextFromPowerPoint()
+      this.getPlainTextFromWord()
         .then((selectedText) => {
           this.textToPlay = selectedText;
           console.log(this.textToPlay);
@@ -318,35 +318,15 @@ export default class App extends React.Component {
    * Grabs all the text from the active document
    */
   grabAllText = async () => {
-    var currentSlideIndex = null;
-    Office.context.document.getSelectedDataAsync(Office.CoercionType.SlideRange, function (asyncResult) {
-      if (asyncResult.status == "failed") {
-        console.log("Error");
-      } else {
-        currentSlideIndex = asyncResult.value.slides[0].index - 1;
-        console.log(asyncResult.value.slides[0].index);
-      }
-    });
     return new Promise((resolve, reject) => {
-      var text = "";
-      PowerPoint.run(async (context) => {
-        context.presentation.load("slides");
+      Word.run(async (context) => {
+        var body = context.document.body;
+        context.load(body, "text");
         await context.sync();
-        const slide = context.presentation.slides.getItemAt(currentSlideIndex);
-        slide.load("shapes");
-        await context.sync();
-        const shapes = slide.shapes;
-        for (let i = 0; i < shapes.items.length; i++) {
-          const shape = shapes.items[i];
-          shape.load("textFrame/textRange");
-          await context.sync();
-          const textRange = shape.textFrame.textRange;
-          if (textRange.text) {
-            text += textRange.text + " ";
-          }
-          text += "।";
-        }
-        resolve(text);
+
+        const allText = body.text;
+
+        resolve(allText);
       }).catch((error) => {
         console.log("Error:", error);
         reject(error);
@@ -355,7 +335,8 @@ export default class App extends React.Component {
   };
 
 
-  getPlainTextFromPowerPoint = async () => {
+
+  getPlainTextFromWord = async () => {
     await this.grabAllText()
       .then((selectedText) => {
         if (this.format == "ansi") {
@@ -425,7 +406,7 @@ export default class App extends React.Component {
       console.log("Here");
       this.resetVariables();
       this.textToPlay = null;
-      await this.getPlainTextFromPowerPoint();
+      await this.getPlainTextFromWord();
       await this.playNextChunk();
     } else if (this.state.currentlyPlaying == true && this.state.startedPlaying == true) {
       this.pauseAllAudio();
