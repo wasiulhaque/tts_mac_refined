@@ -26,6 +26,7 @@ import { BorderAll } from "@mui/icons-material";
 import { fileToAudioBuffer, mergeAudioBuffers } from "./../../modules/chunkify";
 import { async } from "regenerator-runtime";
 import io from "socket.io-client";
+import Crunker from "crunker";
 
 const containerStyle = {
   backgroundColor: "white",
@@ -149,6 +150,7 @@ export default class App extends React.Component {
       console.log(`Received response for ${index}`);
       
       if (audio){
+        responseBuffers[index] = audio;
         const audioSrc = `data:audio/wav;base64,${audio}`;
         const audioElement = new Audio(audioSrc);
         console.log(`Created audio blob players for ${index}`);
@@ -278,16 +280,38 @@ export default class App extends React.Component {
   };
 
   handleDownload = async () => {
-    let audioBufferList = [];
-    responseBuffers.forEach(async (responseBuffer) => {
-      let audioBuffer = await fileToAudioBuffer(responseBuffer);
-      audioBufferList.push(audioBuffer);
-      console.log(`Buffer here: ${audioBuffer}}`);
-      console.log("HJ");
-    });
-    console.log("Hello");
+    console.log("Download button clicked");
+    let audioBuffers = [];
+    for (let i = 0; i < Object.keys(responseBuffers).length; i++) {
+      audioBuffers.push(this.base64ToBlob(responseBuffers[i]));
+    }
+    console.log("Audio buffers collected");
+    console.log(audioBuffers);
+    const crunker = new Crunker({ sampleRate: 22050 });
+    crunker
+      .fetchAudio(...audioBuffers)
+      .then((buffers) => {
+        console.log("Audio buffers fetched");
+        return crunker.concatAudio(buffers);
+      })
+      .then((merged) => {
+        console.log("Audio buffers merged");
+        return crunker.export(merged, "audio/mp3");
+      })
+      .then((output) => {
+        crunker.download(
+          output.blob,
+          `tts_audio`
+        );
+        // document.body.append(output.element);
+      })
+      .catch((error) => {
+        console.log("in errror", error);
+      });
 
-    mergeAudioBuffers(audioBufferList);
+    crunker.notSupported(() => {
+      // Handle no browser support
+    });
   };
 
   /**
@@ -347,6 +371,7 @@ export default class App extends React.Component {
         resolve(this.textToPlay)
       })
   };
+  
 
   splitLongWords = (words, maxWords) => {
     const wordChunks = [];
