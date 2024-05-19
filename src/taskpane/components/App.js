@@ -25,6 +25,7 @@ import StopOutlinedIcon from "@mui/icons-material/StopOutlined";
 import { BorderAll } from "@mui/icons-material";
 import { fileToAudioBuffer, mergeAudioBuffers } from "./../../modules/chunkify";
 import { async } from "regenerator-runtime";
+import io from "socket.io-client";
 
 const containerStyle = {
   backgroundColor: "white",
@@ -129,13 +130,35 @@ export default class App extends React.Component {
       currentlyPlaying: false,
       startedPlaying: false,
       globalText: null,
+      isSocketConnected: false,
     };
   }
+
+  initializeSocket = () => {
+    this.socket = io("https://dev.revesoft.com:9395", { transports: ["websocket"] });
+    this.socket.on("connect", () => {
+      console.log("Connected to the server");
+      this.setState({ isSocketConnected: true });
+    });
+    this.socket.on("disconnect", () => {
+      console.log("Disconnected from the server");
+      this.setState({ isSocketConnected: false });
+    });
+    this.socket.on("result", (data) => {
+      console.log(data);
+    });
+  }
+
 
   componentDidMount() {
     this.setState({
       listItems: [],
     });
+
+    if (this.state.isSocketConnected == false) {
+      this.initializeSocket();
+    }
+
   }
 
   /**
@@ -157,9 +180,10 @@ export default class App extends React.Component {
     this.format = newFormat;
     console.log(this.format);
     if (this.format == "ansi") {
-      this.convertAllTextToUnicode()
+      this.getPlainTextFromPowerPoint()
         .then((selectedText) => {
           this.textToPlay = selectedText;
+          console.log(this.textToPlay);
         })
         .catch((error) => {
           console.log(error);
@@ -279,33 +303,8 @@ export default class App extends React.Component {
     });
   };
 
-  /**
-   * Converts ansi text to unicode
-   * @returns unicode string
-   */
-  convertAllTextToUnicode = async () => {
-    return Excel.run(async (context) => {
-      const range = context.workbook.getSelectedRange();
-      range.load("values");
-      return await context
-        .sync()
-        .then(function () {
-          var allText = range.values;
-          allText = allText.toString();
-          console.log(bnAnsiToUnicode(allText));
-          if (this.format == "ansi") {
-            return bnAnsiToUnicode(selectedText);
-          } else if (this.format == "unicode") {
-            return selectedText;
-          }
-        })
-        .catch(function (error) {
-          console.log("Error: ", error);
-        });
-    });
-  };
 
-  getPlainTextFromWord = async () => {
+  getPlainTextFromPowerPoint = async () => {
     await this.grabAllText()
       .then((selectedText) => {
         if (this.format == "ansi") {
@@ -317,6 +316,9 @@ export default class App extends React.Component {
       .catch((error) => {
         console.log(error);
       });
+      return new Promise((resolve, reject) => {
+        resolve(this.textToPlay)
+      })
   };
 
   splitLongWords = (words, maxWords) => {
@@ -371,7 +373,7 @@ export default class App extends React.Component {
       console.log("Here");
       this.resetVariables();
       this.textToPlay = null;
-      await this.getPlainTextFromWord();
+      await this.getPlainTextFromPowerPoint();
       await this.playNextChunk();
     } else if (this.state.currentlyPlaying == true && this.state.startedPlaying == true) {
       this.pauseAllAudio();
