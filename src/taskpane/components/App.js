@@ -136,7 +136,7 @@ export default class App extends React.Component {
   }
 
   initializeSocket = () => {
-    this.socket = io("https://dev.revesoft.com:9395", { transports: ["websocket"] });
+    this.socket = io("https://read.bangla.gov.bd:9395", { transports: ["websocket"] });
     this.socket.on("connect", () => {
       console.log("Connected to the server");
       this.setState({ isSocketConnected: true });
@@ -510,6 +510,8 @@ export default class App extends React.Component {
             </ToggleButton>
           </ToggleButtonGroup>
         </div> */}
+        
+        {/*
 
             <div className="square">
               <div className="caption">অক্ষরসেট</div>
@@ -549,10 +551,12 @@ export default class App extends React.Component {
               </div>
             </div>
 
+            */}
+
             <div className="square" style={{ marginTop: "30px", marginBottom: "20px" }}>
               <div className="caption">কন্ঠ</div>
               <div className="button-container">
-                <ToggleButtonGroup value={gender} exclusive onChange={this.handleGenderChange}>
+                <ToggleButtonGroup value={gender} exclusive onChange={this.handleGenderChange} disabled={currentlyPlaying}>
                   <ToggleButton
                     value="male"
                     aria-label="পুরুষ"
@@ -694,12 +698,14 @@ export default class App extends React.Component {
                   size="large"
                   onClick={this.handleClearButton}
                   color="stop"
+                  disabled={!currentlyPlaying}
                   style={{ borderRadius: "8px", height: "40px", width: "100px" }}
                 >
                   <StopOutlinedIcon />
                   {/* Clear */}
                 </Button>
               </div>
+              {/*
               <Button
                 variant="contained"
                 size="small"
@@ -709,8 +715,9 @@ export default class App extends React.Component {
                 disabled={!downloadActivate}
               >
                 <FileDownloadOutlinedIcon />
-                {/* ডাউনলোড */}
+                ডাউনলোড
               </Button>
+              */} 
             </div>
           </div>
         </div>
