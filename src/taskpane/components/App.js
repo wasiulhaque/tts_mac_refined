@@ -136,7 +136,7 @@ export default class App extends React.Component {
   }
 
   initializeSocket = () => {
-    this.socket = io("https://dev.revesoft.com:9395", { transports: ["websocket"] });
+    this.socket = io("https://read.bangla.gov.bd:9395", { transports: ["websocket"] });
     this.socket.on("connect", () => {
       console.log("Connected to the server");
       this.setState({ isSocketConnected: true });
@@ -492,7 +492,7 @@ export default class App extends React.Component {
           </ToggleButtonGroup>
         </div> */}
 
-            <div className="square">
+            {/* <div className="square">
               <div className="caption">অক্ষরসেট</div>
               <div className="button-container">
                 <ToggleButtonGroup value={format} exclusive onChange={this.handleFormatButton}>
@@ -528,7 +528,7 @@ export default class App extends React.Component {
                   </ToggleButton>
                 </ToggleButtonGroup>
               </div>
-            </div>
+            </div> */}
 
             <div className="square" style={{ marginTop: "30px", marginBottom: "20px" }}>
               <div className="caption">কন্ঠ</div>
@@ -538,6 +538,7 @@ export default class App extends React.Component {
                     value="male"
                     aria-label="পুরুষ"
                     className="ms-welcome__action ms-button-uniform"
+                    disabled={currentlyPlaying}
                     style={{
                       height: "40px",
                       color: gender === "male" ? "white" : "black",
@@ -553,6 +554,7 @@ export default class App extends React.Component {
                     value="female"
                     aria-label="নারী"
                     className="ms-welcome__action ms-button-uniform"
+                    disabled={currentlyPlaying}
                     style={{
                       height: "40px",
                       color: gender === "female" ? "white" : "black",
@@ -675,23 +677,25 @@ export default class App extends React.Component {
                   size="large"
                   onClick={this.handleClearButton}
                   color="stop"
+                  disabled={currentlyPlaying == true ? false : true}
                   style={{ borderRadius: "8px", height: "40px", width: "100px" }}
                 >
                   <StopOutlinedIcon />
                   {/* Clear */}
                 </Button>
               </div>
-              <Button
+              {/* <Button
                 variant="contained"
                 size="small"
                 onClick={this.handleDownload}
                 color="download"
                 style={{ borderRadius: "8px", height: "40px", width: "100px" }}
                 disabled={!downloadActivate}
-              >
-                <FileDownloadOutlinedIcon />
+                visible={false}
+              > */}
+                {/* <FileDownloadOutlinedIcon /> */}
                 {/* ডাউনলোড */}
-              </Button>
+              {/* </Button> */}
             </div>
           </div>
         </div>

@@ -74,9 +74,9 @@
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Get started with your sample add-in!"/>
-        <bt:String id="CommandsGroup.Label" DefaultValue="Text-To-Speech"/>
+        <bt:String id="CommandsGroup.Label" DefaultValue="লেখা থেকে কথা"/>
         <bt:String id="TaskpaneButton.Label" DefaultValue="উচ্চারণ"/>
-        <bt:String id="Ribbon.Label" DefaultValue="উচ্চারণ Web"/>
+        <bt:String id="Ribbon.Label" DefaultValue="উচ্চারণ"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="Your sample add-in loaded succesfully. Go to the HOME tab and click the 'Show Taskpane' button to get started."/>
