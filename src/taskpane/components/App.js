@@ -132,6 +132,7 @@ export default class App extends React.Component {
       startedPlaying: false,
       globalText: null,
       isSocketConnected: false,
+      isPaused: false,
     };
   }
 
@@ -471,14 +472,15 @@ export default class App extends React.Component {
   };
 
   pauseAllAudio() {
-    this.setState({ currentlyPlaying: false });
+    this.setState({ currentlyPlaying: false, isPaused: true });
+    console.log("Pausing all audio");
     for (const audioElement of responseAudios) {
       audioElement.pause();
     }
   }
 
   stopAllAudio() {
-    this.setState({ currentlyPlaying: false, downloadActivate: false });
+    this.setState({ currentlyPlaying: false, downloadActivate: false, isPaused: false }); 
     for (const audioElement of responseAudios) {
       audioElement.pause();
       audioElement.currentTime = 0;
@@ -493,7 +495,7 @@ export default class App extends React.Component {
   }
 
   render() {
-    const { type, format, gender, downloadActivate, currentlyPlaying, startedPlaying } = this.state;
+    const { type, format, gender, downloadActivate, currentlyPlaying, startedPlaying, isPaused } = this.state;
 
     return (
       <ThemeProvider theme={theme}>
@@ -556,7 +558,7 @@ export default class App extends React.Component {
             <div className="square" style={{ marginTop: "30px", marginBottom: "20px" }}>
               <div className="caption">কন্ঠ</div>
               <div className="button-container">
-                <ToggleButtonGroup value={gender} exclusive onChange={this.handleGenderChange} disabled={currentlyPlaying}>
+                <ToggleButtonGroup value={gender} exclusive onChange={this.handleGenderChange} disabled={currentlyPlaying || startedPlaying}>
                   <ToggleButton
                     value="male"
                     aria-label="পুরুষ"
@@ -698,7 +700,7 @@ export default class App extends React.Component {
                   size="large"
                   onClick={this.handleClearButton}
                   color="stop"
-                  disabled={!currentlyPlaying}
+                  disabled={!currentlyPlaying && !startedPlaying}  
                   style={{ borderRadius: "8px", height: "40px", width: "100px" }}
                 >
                   <StopOutlinedIcon />
