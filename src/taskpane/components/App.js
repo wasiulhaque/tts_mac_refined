@@ -538,7 +538,7 @@ export default class App extends React.Component {
                     value="male"
                     aria-label="পুরুষ"
                     className="ms-welcome__action ms-button-uniform"
-                    disabled={currentlyPlaying}
+                    disabled={currentlyPlaying || startedPlaying}
                     style={{
                       height: "40px",
                       color: gender === "male" ? "white" : "black",
@@ -554,7 +554,7 @@ export default class App extends React.Component {
                     value="female"
                     aria-label="নারী"
                     className="ms-welcome__action ms-button-uniform"
-                    disabled={currentlyPlaying}
+                    disabled={currentlyPlaying || startedPlaying}
                     style={{
                       height: "40px",
                       color: gender === "female" ? "white" : "black",
@@ -677,7 +677,7 @@ export default class App extends React.Component {
                   size="large"
                   onClick={this.handleClearButton}
                   color="stop"
-                  disabled={currentlyPlaying == true ? false : true}
+                  disabled={!currentlyPlaying && !startedPlaying} 
                   style={{ borderRadius: "8px", height: "40px", width: "100px" }}
                 >
                   <StopOutlinedIcon />
