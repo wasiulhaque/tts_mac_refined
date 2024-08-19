@@ -548,7 +548,7 @@ export default class App extends React.Component {
             <div className="square" style={{ marginTop: "30px", marginBottom: "20px" }}>
               <div className="caption">কন্ঠ</div>
               <div className="button-container">
-                <ToggleButtonGroup value={gender} exclusive onChange={this.handleGenderChange} disabled={currentlyPlaying}>
+                <ToggleButtonGroup value={gender} exclusive onChange={this.handleGenderChange} disabled={currentlyPlaying || startedPlaying}>
                   <ToggleButton
                     value="male"
                     aria-label="পুরুষ"
@@ -690,7 +690,7 @@ export default class App extends React.Component {
                   size="large"
                   onClick={this.handleClearButton}
                   color="stop"
-                  disabled={!currentlyPlaying}
+                  disabled={!currentlyPlaying && !startedPlaying} 
                   style={{ borderRadius: "8px", height: "40px", width: "100px" }}
                 >
                   <StopOutlinedIcon />
