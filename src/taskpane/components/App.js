@@ -337,19 +337,37 @@ export default class App extends React.Component {
         slide.load("shapes");
         await context.sync();
         const shapes = slide.shapes;
+        // Remove the image shape from the shapes collection
+        // shapes.items = shapes.items.filter((shape) => shape.shapeType !== Office.ShapeType.Image);
+        // console.log(shapes);
         for (let i = 0; i < shapes.items.length; i++) {
           const shape = shapes.items[i];
+          console.log(shape["_Ty"]);
+          if(shape["_Ty"] == "Image") {
+            console.log("Image shape found");
+            text += " ";
+            continue;
+          }
           shape.load("textFrame/textRange");
+          console.log(shape["_Ty"]);
           await context.sync();
+          try {
           const textRange = shape.textFrame.textRange;
           if (textRange.text) {
             text += textRange.text + " ";
           }
           text += "।";
+          } catch (error) {
+            console.log("Error hereeee:", error);
+          }
         }
         resolve(text);
       }).catch((error) => {
         console.log("Error:", error);
+        // Show full trace
+        if (error instanceof OfficeExtension.Error) {
+          console.log("Debug info: ", error.debugInfo);
+        } 
         reject(error);
       });
     });
