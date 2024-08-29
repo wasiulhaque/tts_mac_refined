@@ -486,6 +486,7 @@ export default class App extends React.Component {
   resetVariables() {
     responseAudios = [];
     playerIndex = 0;
+    this.setState({ currentlyPlaying: false, downloadActivate: false, startedPlaying: false });
   }
 
   render() {
